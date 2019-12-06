@@ -10,6 +10,7 @@ from models.gan_factory import gan_factory
 from utils import Utils, Logger
 from PIL import Image
 import os
+from tqdm import tqdm
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -178,7 +179,7 @@ class Trainer(object):
         iteration = 0
 
         for epoch in range(self.num_epochs):
-            for sample in self.data_loader:
+            for sample in tqdm(self.data_loader):
                 iteration += 1
                 right_images = sample['right_images']
                 right_embed = sample['right_embed']
