@@ -23,7 +23,7 @@ class VisdomPlotter(object):
                 ylabel=var_name
             ))
         else:
-            self.viz.updateTrace(X=np.array([x]), Y=np.array([y]), env=self.env, win=self.plots[var_name], name=split_name)
+            self.viz.line(X=np.array([x]), Y=np.array([y]), env=self.env, win=self.plots[var_name], name=split_name, update='append')
 
     def draw(self, var_name, images):
         if var_name not in self.plots:
