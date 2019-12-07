@@ -1,5 +1,5 @@
 echo 'Downloading Datasets...'
-./download_and_unzip_datasets.csh
+./download.sh
 echo 'Organizing Datasets Folder...'
 ./organize_datasets.sh
 echo 'Resizing Images...'
