@@ -88,12 +88,10 @@ class Trainer(object):
 
 
     def train(self):
-        #criterion = nn.BCELoss()
+        criterion = nn.CrossEntropyLoss()
         l2_loss = nn.MSELoss()
         l1_loss = nn.L1Loss()
         iteration = 0
-
-        criterion = nn.CrossEntropyLoss()
 
         for epoch in range(self.num_epochs):
 
@@ -103,12 +101,15 @@ class Trainer(object):
 
             for batch_sample in tqdm(self.data_loader['train']):
 
+                iteration += 1
+
                 image = batch_sample['image'].to(device)
-                wrong_image = batch_sample['wrong_image'].to(device)
+                #wrong_image = batch_sample['wrong_image'].to(device)
                 question = batch_sample['question'].to(device)
                 label = batch_sample['answer_label'].to(device)
                 multi_choice = batch_sample['answer_multi_choice']  # not tensor, list.
 
+                '''
                 self.logger.draw(image, wrong_image)
 
                 self.optimD.zero_grad()
@@ -122,6 +123,71 @@ class Trainer(object):
                 intermediate, prediction = self.discriminator(output, qst_emb)
 
                 loss = criterion(prediction, label)
+                '''
+
+
+                # Train the discriminator
+                # add a new loss to discriminator to identify real and fake
+                self.generator.zero_grad()
+                self.discriminator.zero_grad()
+                self.optimG.zero_grad()
+                self.optimD.zero_grad()
+
+                qst_emb = self.generator.gen_qst_emb(question)
+                _, outputs = self.discriminator(image, qst_emb)
+                real_loss = criterion(outputs, label)
+                real_score = outputs
+
+                noise = Variable(torch.randn(image.size(0), 100)).to(device)
+                noise = noise.view(noise.size(0), 100, 1, 1)
+
+                fake_images = self.generator(question, label, noise)
+                _, outputs = self.discriminator(fake_images, qst_emb)
+                fake_loss = criterion(outputs, label)
+                fake_score = outputs
+
+                d_loss = real_loss + fake_loss
+
+                d_loss.backward()
+                self.optimD.step()
+
+                # Train the generator
+                self.generator.zero_grad()
+                self.discriminator.zero_grad()
+                self.optimG.zero_grad()
+                self.optimD.zero_grad()
+
+                qst_emb = self.generator.gen_qst_emb(question)
+                noise = Variable(torch.randn(image.size(0), 100)).to(device)
+                noise = noise.view(noise.size(0), 100, 1, 1)
+
+                fake_images = self.generator(question, label, noise)
+                activation_fake, outputs = self.discriminator(fake_images, qst_emb)
+                activation_real,_ = self.discriminator(image, qst_emb)
+
+                activation_fake = torch.mean(activation_fake, 0)
+                activation_real = torch.mean(activation_real, 0)
+
+                #======= Generator Loss function============
+                # This is a customized loss function, the first term is the regular cross entropy loss
+                # The second term is feature matching loss, this measure the distance between the real and generated
+                # images statistics by comparing intermediate layers activations
+                # The third term is L1 distance between the generated and real images, this is helpful for the conditional case
+                # because it links the embedding feature vector directly to certain pixel values.
+                #===========================================
+                g_loss = criterion(outputs, label) \
+                         + self.l2_coef * l2_loss(activation_fake, activation_real.detach()) \
+                         + self.l1_coef * l1_loss(fake_images, image)
+
+                g_loss.backward()
+                self.optimG.step()
+
+                if iteration % 2 == 0:
+                    self.logger.log_iteration_gan(epoch,d_loss, g_loss, real_score, fake_score)
+                    self.logger.draw(image, fake_images)
+
+            self.logger.plot_epoch_w_scores(epoch)
+
             '''    
                 iteration += 1
                 right_images = sample['right_images']
