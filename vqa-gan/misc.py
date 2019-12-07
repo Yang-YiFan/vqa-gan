@@ -142,5 +142,16 @@ class Logger(object):
         self.hist_DGx = []
 
     def draw(self, right_images, fake_images):
-        self.viz.draw('generated images', fake_images.data.cpu().numpy()[:64] * 128 + 128)
-        self.viz.draw('real images', right_images.data.cpu().numpy()[:64] * 128 + 128)
+        right_images = self.rescale(right_images)
+        fake_images = self.rescale(fake_images)
+        self.viz.draw('generated images', fake_images.data.cpu().numpy()[:16,:,:,:] * 255)
+        self.viz.draw('real images', right_images.data.cpu().numpy()[:16,:,:,:] * 255)
+
+    def rescale(self, images):
+        images[:,0,:,:] = images[:,0,:,:] * 0.229 + 0.485
+        images[:,1,:,:] = images[:,1,:,:] * 0.224 + 0.456
+        images[:,2,:,:] = images[:,2,:,:] * 0.225 + 0.406
+        return images
+
+
+

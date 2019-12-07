@@ -42,7 +42,7 @@ class Trainer(object):
 
         self.noise_dim = 100
         self.beta1 = 0.5
-        #self.logger = Logger('vqa-gan')
+        self.logger = Logger('vqa-gan')
         self.checkpoints_path = 'checkpoints'
 
         self.data_loader = get_loader(
@@ -104,9 +104,12 @@ class Trainer(object):
             for batch_sample in tqdm(self.data_loader['train']):
 
                 image = batch_sample['image'].to(device)
+                wrong_image = batch_sample['wrong_image'].to(device)
                 question = batch_sample['question'].to(device)
                 label = batch_sample['answer_label'].to(device)
                 multi_choice = batch_sample['answer_multi_choice']  # not tensor, list.
+
+                self.logger.draw(image, wrong_image)
 
                 self.optimD.zero_grad()
                 self.optimG.zero_grad()
@@ -114,8 +117,9 @@ class Trainer(object):
                 noise = Variable(torch.randn(image.size(0), 100)).to(device)
                 noise = noise.view(noise.size(0), 100, 1, 1)
 
-                qst_emb, output = self.generator(question, label, noise)
-                prediction = self.discriminator(image, qst_emb)
+                output = self.generator(question, label, noise)
+                qst_emb = self.generator.gen_qst_emb(question)
+                intermediate, prediction = self.discriminator(output, qst_emb)
 
                 loss = criterion(prediction, label)
             '''    

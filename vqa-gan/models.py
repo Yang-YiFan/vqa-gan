@@ -33,14 +33,16 @@ class ImgEncoder(nn.Module):
         #print('hello')
         with torch.no_grad():
             img_feature = self.model(image)                  # [batch_size, vgg16(19)_fc=4096]
-        
+
         img_feature = img_feature.view(img_feature.size(0), -1)
+        intermediate = img_feature
+        
         img_feature = self.fc(img_feature)                   # [batch_size, embed_size]
 
         l2_norm = img_feature.norm(p=2, dim=1, keepdim=True).detach()
         img_feature = img_feature.div(l2_norm)               # l2-normalized feature vector
 
-        return img_feature
+        return intermediate, img_feature
 
 
 class QstEncoder(nn.Module): # for discriminator
@@ -81,7 +83,7 @@ class Discriminator(nn.Module):
 
     def forward(self, img, qst_emb):
 
-        img_feature = self.img_encoder(img)                     # [batch_size, embed_size]
+        intermediate, img_feature = self.img_encoder(img)                     # [batch_size, embed_size]
         qst_feature = self.qst_encoder(qst_emb)                 # [batch_size, embed_size]
         combined_feature = torch.mul(img_feature, qst_feature)  # [batch_size, embed_size]
         combined_feature = self.tanh(combined_feature)
@@ -91,7 +93,7 @@ class Discriminator(nn.Module):
         combined_feature = self.dropout(combined_feature)
         combined_feature = self.fc2(combined_feature)           # [batch_size, ans_vocab_size=1000]
 
-        return combined_feature
+        return intermediate, combined_feature
 
 
 class QstAnsEncoder(nn.Module):
@@ -121,7 +123,12 @@ class QstAnsEncoder(nn.Module):
         qst_feature = self.tanh(qst_feature)
         qst_feature = self.fc(qst_feature)                            # [batch_size, embed_size]
 
-        return qst_emb, qst_feature
+        return qst_feature
+
+    def gen_qst_emb(self, question):
+        qst_emb = self.word2vec_qst(question)
+        return qst_emb
+
 
 class ImgDecoder(nn.Module):
 	def __init__(self, embed_size):
@@ -159,16 +166,14 @@ class ImgDecoder(nn.Module):
 			nn.Upsample(scale_factor=2),
 			# state size. (ngf) x 56 x 56
 			BasicBlock(self.ngf, self.ngf),
-            BasicBlock(self.ngf, self.ngf),
+            #BasicBlock(self.ngf, self.ngf),
 			nn.Upsample(scale_factor=2),
 			# state size. (ngf) x 112 x 112
 			BasicBlock(self.ngf, self.ngf),
-			#BasicBlock(self.ngf, self.ngf),
-            nn.ConvTranspose2d(self.ngf, self.ngf, 3, 2, 1, bias=False),
+            nn.ConvTranspose2d(self.ngf, self.ngf, 4, 2, 1, bias=False),
 			nn.BatchNorm2d(self.ngf),
 			nn.ReLU(True),
             # state size. (ngf) x 224 x 224
-            #BasicBlock(self.ngf, self.ngf),
 			nn.Conv2d(self.ngf, 3, [3, 3], padding=1),
 			nn.Tanh()
 			# state size. (num_channels) x 224 x 224
@@ -202,8 +207,11 @@ class Generator(nn.Module):
 
     def forward(self, question, answer, noise):
 
-        qst_vec, qst_feature = self.qstans_encoder(question, answer)        # [batch_size, embed_size]
+        qst_feature = self.qstans_encoder(question, answer)        # [batch_size, embed_size]
         output = self.img_decoder(qst_feature, noise)
 
-        return qst_vec, output                                              # batch x 3 x 224 x 224
+        return output                                              # batch x 3 x 224 x 224
 
+    def gen_qst_emb(self, question):
+        qst_emb = self.qstans_encoder.gen_qst_emb(question)
+        return qst_emb

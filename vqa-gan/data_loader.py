@@ -39,6 +39,8 @@ class VqaDataset(data.Dataset):
             ans2idc = [ans_vocab.word2idx(w) for w in vqa[idx]['valid_answers']]
             ans2idx = np.random.choice(ans2idc)
             sample['answer_label'] = ans2idx         # for training
+            sample['wrong_image']  = self.find_wrong_image(ans2idx)
+            #print('right classes ', ans2idc)
 
             mul2idc = list([-1] * max_num_ans)       # padded with -1 (no meaning) not used in 'ans_vocab'
             mul2idc[:len(ans2idc)] = ans2idc         # our model should not predict -1
@@ -46,12 +48,24 @@ class VqaDataset(data.Dataset):
 
         if transform:
             sample['image'] = transform(sample['image'])
+            sample['wrong_image'] = transform(sample['wrong_image'])
 
         return sample
 
     def __len__(self):
 
         return len(self.vqa)
+
+    def find_wrong_image(self, ans2idx):
+        idx = np.random.randint(len(self.vqa))
+        ans2idc = [self.ans_vocab.word2idx(w) for w in self.vqa[idx]['valid_answers']]
+        if ans2idx not in ans2idc:
+            #print('wrong classes ', ans2idc, ' right class ', ans2idx)
+            image = self.vqa[idx]['image_path']
+            image = Image.open(image).convert('RGB')
+            return image
+
+        return self.find_wrong_image(ans2idx)
 
 
 def get_loader(input_dir, input_vqa_train, input_vqa_valid, max_qst_length, max_num_ans, batch_size, num_workers):
