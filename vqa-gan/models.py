@@ -155,16 +155,19 @@ class ImgDecoder(nn.Module):
 			nn.ReLU(True),
 			# state size. (ngf*8) x 7 x 7
 			BasicBlock(self.ngf * 8, self.ngf * 8),
+            nn.Upsample(scale_factor=2),
 			BasicBlock(self.ngf * 8, self.ngf * 4, downsample=conv3x3(self.ngf * 8, self.ngf * 4)),
-			nn.Upsample(scale_factor=2),
+			##nn.Upsample(scale_factor=2),
 			# state size. (ngf*4) x 14 x 14
 			BasicBlock(self.ngf * 4, self.ngf * 4),
+            nn.Upsample(scale_factor=2),
 			BasicBlock(self.ngf * 4, self.ngf * 2, downsample=conv3x3(self.ngf * 4, self.ngf * 2)),
-			nn.Upsample(scale_factor=2),
+			##nn.Upsample(scale_factor=2),
 			# state size. (ngf*2) x 28 x 28
 			BasicBlock(self.ngf * 2, self.ngf * 2),
+            nn.Upsample(scale_factor=2),
 			BasicBlock(self.ngf * 2, self.ngf, downsample=conv3x3(self.ngf * 2, self.ngf)),
-			nn.Upsample(scale_factor=2),
+			##nn.Upsample(scale_factor=2),
 			# state size. (ngf) x 56 x 56
 			BasicBlock(self.ngf, self.ngf),
             #BasicBlock(self.ngf, self.ngf),

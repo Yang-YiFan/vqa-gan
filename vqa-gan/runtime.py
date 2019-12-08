@@ -44,7 +44,7 @@ parser.add_argument('--step_size', type=int, default=10,
 parser.add_argument('--gamma', type=float, default=0.1,
                     help='multiplicative factor of learning rate decay.')
 
-parser.add_argument('--num_epochs', type=int, default=30,
+parser.add_argument('--num_epochs', type=int, default=300,
                     help='number of epochs.')
 
 parser.add_argument('--batch_size', type=int, default=256,
