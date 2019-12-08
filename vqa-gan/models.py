@@ -131,15 +131,16 @@ class QstAnsEncoder(nn.Module):
 
 
 class ImgDecoder(nn.Module):
-	def __init__(self, embed_size):
-		super(ImgDecoder, self).__init__()
-		self.image_size = 224
-		self.num_channels = 3
-		self.noise_dim = 100
-		self.embed_size = embed_size
+    def __init__(self, embed_size, img_feature_size):
+        super(ImgDecoder, self).__init__()
+        self.image_size = 224
+        self.num_channels = 3
+        self.noise_dim = 100
+        self.embed_size = embed_size
+        self.img_feature_size = img_feature_size
 		#self.projected_embed_dim = 256
-		self.latent_dim = self.noise_dim + embed_size
-		self.ngf = 64
+        self.latent_dim = self.noise_dim + embed_size + img_feature_size
+        self.ngf = 64
 
 		#self.projection = nn.Sequential(
 		#	nn.Linear(in_features=self.embed_dim, out_features=self.projected_embed_dim),
@@ -148,7 +149,7 @@ class ImgDecoder(nn.Module):
 		#	)
 
 		# based on: https://github.com/pytorch/examples/blob/master/dcgan/main.py
-		self.netG = nn.Sequential(
+        self.netG = nn.Sequential(
 			nn.ConvTranspose2d(self.latent_dim, self.ngf * 8, 7, 1, 0, bias=False),
 			nn.BatchNorm2d(self.ngf * 8),
 			nn.ReLU(True),
@@ -179,36 +180,35 @@ class ImgDecoder(nn.Module):
 			# state size. (num_channels) x 224 x 224
 			)
 
-		for m in self.modules():
-			if isinstance(m, nn.Conv2d):
-				nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-			elif isinstance(m, nn.BatchNorm2d):
-				nn.init.constant_(m.weight, 1)
-				nn.init.constant_(m.bias, 0)
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+            elif isinstance(m, nn.BatchNorm2d):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
 
 
-	def forward(self, embed_vector, z):
+    def forward(self, embed_vector, img_feature, z):
 
         # projected_embed = self.projection(embed_vector).unsqueeze(2).unsqueeze(3)
-		latent_vector = torch.cat([embed_vector.unsqueeze(2).unsqueeze(3), z], 1)
-		output = self.netG(latent_vector)
+        latent_vector = torch.cat([embed_vector.unsqueeze(2).unsqueeze(3), img_feature.unsqueeze(2).unsqueeze(3), z], 1)
+        output = self.netG(latent_vector)
 
-		return output
-
+        return output
 
 class Generator(nn.Module):
 
-    def __init__(self, embed_size, qst_vocab_size, ans_vocab_size, word_embed_size, num_layers, hidden_size):
+    def __init__(self, embed_size, qst_vocab_size, ans_vocab_size, word_embed_size, num_layers, hidden_size, img_feature_size):
 
         super(Generator, self).__init__()
-        self.img_decoder = ImgDecoder(embed_size)
+        self.img_decoder = ImgDecoder(embed_size, img_feature_size)
         self.qstans_encoder = QstAnsEncoder(qst_vocab_size, ans_vocab_size, word_embed_size, embed_size, num_layers, hidden_size)
 
 
-    def forward(self, question, answer, noise):
+    def forward(self, question, answer, noise, img_feature):
 
         qst_feature = self.qstans_encoder(question, answer)        # [batch_size, embed_size]
-        output = self.img_decoder(qst_feature, noise)
+        output = self.img_decoder(qst_feature, img_feature, noise)
 
         return output                                              # batch x 3 x 224 x 224
 
