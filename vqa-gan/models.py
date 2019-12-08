@@ -3,6 +3,7 @@ import torch.nn as nn
 import torchvision.models as models
 from torchvision.models.resnet import BasicBlock, conv1x1, conv3x3
 
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class ImgEncoder(nn.Module):
 
@@ -138,7 +139,6 @@ class ImgDecoder(nn.Module):
         self.noise_dim = 100
         self.embed_size = embed_size
         self.img_feature_size = img_feature_size
-		#self.projected_embed_dim = 256
         self.latent_dim = self.noise_dim + embed_size + img_feature_size
         self.ngf = 64
 
@@ -176,7 +176,7 @@ class ImgDecoder(nn.Module):
 			nn.ReLU(True),
             # state size. (ngf) x 224 x 224
 			nn.Conv2d(self.ngf, 3, [3, 3], padding=1),
-			nn.Tanh()
+            #nn.Tanh()
 			# state size. (num_channels) x 224 x 224
 			)
 
@@ -193,6 +193,24 @@ class ImgDecoder(nn.Module):
         # projected_embed = self.projection(embed_vector).unsqueeze(2).unsqueeze(3)
         latent_vector = torch.cat([embed_vector.unsqueeze(2).unsqueeze(3), img_feature.unsqueeze(2).unsqueeze(3), z], 1)
         output = self.netG(latent_vector)
+        '''output = (output+1)/0.5
+
+        a=torch.ones(output.size())
+        a[:,0]=0.485
+        a[:,1]=0.456
+        a[:,2]=0.406
+        b=torch.ones(output.size())
+        b[:,0]=0.299
+        b[:,1]=0.224
+        b[:,2]=0.225
+        a=a.to(device)
+        b=b.to(device)
+
+        output = (output-a)/b
+        
+        #output[:,0] = (((output[:,0]+1)/0.5)-0.485)/0.299
+        #output[:,1] = (((output[:,1]+1)/0.5)-0.456)/0.224
+        #output[:,2] = (((output[:,2]+1)/0.5)-0.406)/0.225'''
 
         return output
 

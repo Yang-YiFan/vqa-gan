@@ -84,7 +84,7 @@ class Trainer(object):
                 + list(self.discriminator.fc1.parameters()) \
                 + list(self.discriminator.fc2.parameters())
         
-        self.optimD = torch.optim.Adam(paramsD, lr=self.lr, betas=(self.beta1, 0.999))
+        self.optimD = torch.optim.Adam(paramsD, lr=self.lr*2, betas=(self.beta1, 0.999))
         self.optimG = torch.optim.Adam(self.generator.parameters(), lr=self.lr, betas=(self.beta1, 0.999))
 
 
@@ -182,6 +182,10 @@ class Trainer(object):
 
                 g_loss.backward()
                 self.optimG.step()
+
+                if iteration==60:
+                    print(fake_images[0])
+                    print(image[0])
 
                 if iteration % 5 == 0:
                     self.logger.log_iteration_gan(epoch,d_loss, g_loss, real_score, fake_score)
