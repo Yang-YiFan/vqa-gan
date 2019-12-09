@@ -57,6 +57,7 @@ class Trainer(object):
 
         qst_vocab_size = self.data_loader['train'].dataset.qst_vocab.vocab_size
         ans_vocab_size = self.data_loader['train'].dataset.ans_vocab.vocab_size
+        self.ans_unk_idx = self.data_loader['train'].dataset.ans_vocab.unk2idx
 
 
         self.generator = Generator(
@@ -99,6 +100,10 @@ class Trainer(object):
             running_loss = 0.0
             running_corr_exp1 = 0
             running_corr_exp2 = 0
+
+            #training phase
+            self.generator.train()
+            self.discriminator.train()
 
             for batch_sample in tqdm(self.data_loader['train']):
 
@@ -192,6 +197,47 @@ class Trainer(object):
                     self.logger.draw(image, fake_images)
 
             self.logger.plot_epoch_w_scores(epoch)
+
+            Utils.save_checkpoint(self.discriminator, self.generator, self.checkpoints_path, self.save_path, epoch)
+
+            #validation phase
+            self.generator.eval()
+            self.discriminator.eval()
+
+            for batch_sample in tqdm(self.data_loader['valid']):
+
+                iteration += 1
+
+                image = batch_sample['image'].to(device)
+                #wrong_image = batch_sample['wrong_image'].to(device)
+                question = batch_sample['question'].to(device)
+                label = batch_sample['answer_label'].to(device)
+                multi_choice = batch_sample['answer_multi_choice']  # not tensor, list.
+
+                with torch.no_grad():
+                    qst_emb = self.generator.gen_qst_emb(question)
+                    _, _, outputs = self.discriminator(image, qst_emb)
+                    _, pred_exp1 = torch.max(outputs, 1)  # [batch_size]
+                    _, pred_exp2 = torch.max(outputs, 1)  # [batch_size]
+                    loss = criterion(outputs, label)
+
+                # Evaluation metric of 'multiple choice'
+                # Exp1: our model prediction to '<unk>' IS accepted as the answer.
+                # Exp2: our model prediction to '<unk>' is NOT accepted as the answer.
+                pred_exp2[pred_exp2 == self.ans_unk_idx] = -9999
+                running_loss += loss.item()
+                running_corr_exp1 += torch.stack([(ans == pred_exp1.cpu()) for ans in multi_choice]).any(dim=0).sum()
+                running_corr_exp2 += torch.stack([(ans == pred_exp2.cpu()) for ans in multi_choice]).any(dim=0).sum()
+
+            # Print the average loss and accuracy in an epoch.
+            batch_step_size = len(self.data_loader['valid'].dataset) / self.batch_size
+            epoch_loss = running_loss / batch_step_size
+            epoch_acc_exp1 = running_corr_exp1.double() / len(self.data_loader['valid'].dataset)      # multiple choice
+            epoch_acc_exp2 = running_corr_exp2.double() / len(self.data_loader['valid'].dataset)      # multiple choice
+
+            print('| {} SET | Epoch [{:02d}/{:02d}], Loss: {:.4f}, Acc(Exp1): {:.4f}, Acc(Exp2): {:.4f} \n'
+                  .format('valid', epoch, self.num_epochs-1, epoch_loss, epoch_acc_exp1, epoch_acc_exp2))
+
 
             '''    
                 iteration += 1

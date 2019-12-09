@@ -1,3 +1,5 @@
 datasets/
 pretrain/
 __pycache__/
+checkpoints/
+logs
