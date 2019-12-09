@@ -23,9 +23,24 @@ class ImgEncoder(nn.Module):
 
         model = models.resnet18(pretrained=True)
         in_features = model.fc.in_features
-        model = nn.Sequential(*(list(model.children())[:-1]))
+        #model = nn.Sequential(*(list(model.children())[:-1]))
 
-        self.model = model                              # loaded model without last fc layer
+        self.front = nn.Sequential(
+            model.conv1,
+            model.bn1,
+            model.relu,
+            model.maxpool,
+            model.layer1,
+            model.layer2,
+            model.layer3,
+            model.layer4
+        )
+
+        self.end = nn.Sequential(
+            model.avgpool
+        )
+
+        #self.model = model                              # loaded model without last fc layer
         self.fc = nn.Linear(in_features, embed_size)    # feature vector of image
 
     def forward(self, image):
@@ -33,7 +48,10 @@ class ImgEncoder(nn.Module):
         """
         #print('hello')
         with torch.no_grad():
-            img_feature = self.model(image)                  # [batch_size, vgg16(19)_fc=4096]
+            #img_feature = self.model(image)                  # [batch_size, vgg16(19)_fc=4096]
+            img_feature = self.front(image)
+            intermediate2 = img_feature
+            img_feature = self.end(img_feature)               # [batch_size, vgg16(19)_fc=4096]
 
         img_feature = img_feature.view(img_feature.size(0), -1)
         intermediate = img_feature
@@ -43,7 +61,9 @@ class ImgEncoder(nn.Module):
         l2_norm = img_feature.norm(p=2, dim=1, keepdim=True).detach()
         img_feature = img_feature.div(l2_norm)               # l2-normalized feature vector
 
-        return intermediate, img_feature
+        #inter is last layer feat (after pooling)
+        #inter2 is layer feat before pooling
+        return intermediate, intermediate2, img_feature
 
 
 class QstEncoder(nn.Module): # for discriminator
@@ -84,7 +104,7 @@ class Discriminator(nn.Module):
 
     def forward(self, img, qst_emb):
 
-        intermediate, img_feature = self.img_encoder(img)                     # [batch_size, embed_size]
+        intermediate, intermediate2, img_feature = self.img_encoder(img)                     # [batch_size, embed_size]
         qst_feature = self.qst_encoder(qst_emb)                 # [batch_size, embed_size]
         combined_feature = torch.mul(img_feature, qst_feature)  # [batch_size, embed_size]
         combined_feature = self.tanh(combined_feature)
@@ -94,7 +114,7 @@ class Discriminator(nn.Module):
         combined_feature = self.dropout(combined_feature)
         combined_feature = self.fc2(combined_feature)           # [batch_size, ans_vocab_size=1000]
 
-        return intermediate, combined_feature
+        return intermediate, intermediate2, combined_feature
 
 
 class QstAnsEncoder(nn.Module):
@@ -149,25 +169,27 @@ class ImgDecoder(nn.Module):
 		#	)
 
 		# based on: https://github.com/pytorch/examples/blob/master/dcgan/main.py
-        self.netG = nn.Sequential(
+        self.netG_front = nn.Sequential(
 			nn.ConvTranspose2d(self.latent_dim, self.ngf * 8, 7, 1, 0, bias=False),
 			nn.BatchNorm2d(self.ngf * 8),
 			nn.ReLU(True),
 			# state size. (ngf*8) x 7 x 7
-			BasicBlock(self.ngf * 8, self.ngf * 8),
+			)
+
+        self.netG_end = nn.Sequential(
+			# state size. (ngf*16) x 7 x 7
+			BasicBlock(self.ngf * 16, self.ngf * 8, downsample=conv3x3(self.ngf * 16, self.ngf * 8)),
+            BasicBlock(self.ngf * 8, self.ngf * 8),
             nn.Upsample(scale_factor=2),
 			BasicBlock(self.ngf * 8, self.ngf * 4, downsample=conv3x3(self.ngf * 8, self.ngf * 4)),
-			##nn.Upsample(scale_factor=2),
 			# state size. (ngf*4) x 14 x 14
 			BasicBlock(self.ngf * 4, self.ngf * 4),
             nn.Upsample(scale_factor=2),
 			BasicBlock(self.ngf * 4, self.ngf * 2, downsample=conv3x3(self.ngf * 4, self.ngf * 2)),
-			##nn.Upsample(scale_factor=2),
 			# state size. (ngf*2) x 28 x 28
 			BasicBlock(self.ngf * 2, self.ngf * 2),
             nn.Upsample(scale_factor=2),
 			BasicBlock(self.ngf * 2, self.ngf, downsample=conv3x3(self.ngf * 2, self.ngf)),
-			##nn.Upsample(scale_factor=2),
 			# state size. (ngf) x 56 x 56
 			BasicBlock(self.ngf, self.ngf),
             #BasicBlock(self.ngf, self.ngf),
@@ -191,29 +213,15 @@ class ImgDecoder(nn.Module):
                 nn.init.constant_(m.bias, 0)
 
 
-    def forward(self, embed_vector, img_feature, z):
+    def forward(self, embed_vector, img_feature, img_feature2, z):
+        #img_feat is feat after resnet pooling
+        #img_feat2 is feat before resnet pooling
 
         # projected_embed = self.projection(embed_vector).unsqueeze(2).unsqueeze(3)
         latent_vector = torch.cat([embed_vector.unsqueeze(2).unsqueeze(3), img_feature.unsqueeze(2).unsqueeze(3), z], 1)
-        output = self.netG(latent_vector)
-        '''output = (output+1)/0.5
-
-        a=torch.ones(output.size())
-        a[:,0]=0.485
-        a[:,1]=0.456
-        a[:,2]=0.406
-        b=torch.ones(output.size())
-        b[:,0]=0.299
-        b[:,1]=0.224
-        b[:,2]=0.225
-        a=a.to(device)
-        b=b.to(device)
-
-        output = (output-a)/b
-        
-        #output[:,0] = (((output[:,0]+1)/0.5)-0.485)/0.299
-        #output[:,1] = (((output[:,1]+1)/0.5)-0.456)/0.224
-        #output[:,2] = (((output[:,2]+1)/0.5)-0.406)/0.225'''
+        output = self.netG_front(latent_vector)
+        output = torch.cat([output, img_feature2], 1)
+        output = self.netG_end(output)
 
         return output
 
@@ -226,10 +234,10 @@ class Generator(nn.Module):
         self.qstans_encoder = QstAnsEncoder(qst_vocab_size, ans_vocab_size, word_embed_size, embed_size, num_layers, hidden_size)
 
 
-    def forward(self, question, answer, noise, img_feature):
+    def forward(self, question, answer, noise, img_feature, img_feature2):
 
         qst_feature = self.qstans_encoder(question, answer)        # [batch_size, embed_size]
-        output = self.img_decoder(qst_feature, img_feature, noise)
+        output = self.img_decoder(qst_feature, img_feature, img_feature2, noise)
 
         return output                                              # batch x 3 x 224 x 224
 

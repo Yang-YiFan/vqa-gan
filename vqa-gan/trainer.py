@@ -135,15 +135,15 @@ class Trainer(object):
                 self.optimD.zero_grad()
 
                 qst_emb = self.generator.gen_qst_emb(question)
-                activation_real, outputs = self.discriminator(image, qst_emb)
+                activation_real, activation_real2, outputs = self.discriminator(image, qst_emb)
                 real_loss = criterion(outputs, label)
                 real_score = outputs
 
                 noise = Variable(torch.randn(image.size(0), 100)).to(device)
                 noise = noise.view(noise.size(0), 100, 1, 1)
 
-                fake_images = self.generator(question, label, noise, activation_real)
-                _, outputs = self.discriminator(fake_images, qst_emb)
+                fake_images = self.generator(question, label, noise, activation_real, activation_real2)
+                _, _, outputs = self.discriminator(fake_images, qst_emb)
                 fake_loss = criterion(outputs, label)
                 fake_score = outputs
 
@@ -162,9 +162,9 @@ class Trainer(object):
                 noise = Variable(torch.randn(image.size(0), 100)).to(device)
                 noise = noise.view(noise.size(0), 100, 1, 1)
 
-                activation_real ,_ = self.discriminator(image, qst_emb)
-                fake_images = self.generator(question, label, noise, activation_real)
-                activation_fake, outputs = self.discriminator(fake_images, qst_emb)
+                activation_real, activation_real2 ,_ = self.discriminator(image, qst_emb)
+                fake_images = self.generator(question, label, noise, activation_real, activation_real2)
+                activation_fake, _, outputs = self.discriminator(fake_images, qst_emb)
 
                 activation_fake = torch.mean(activation_fake, 0)
                 activation_real = torch.mean(activation_real, 0)
