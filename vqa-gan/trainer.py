@@ -144,6 +144,15 @@ class Trainer(object):
                 real_loss = criterion(outputs, label)
                 real_score = outputs
 
+
+                _, pred_exp1 = torch.max(outputs, 1)  # [batch_size]
+                _, pred_exp2 = torch.max(outputs, 1)  # [batch_size]
+                pred_exp2[pred_exp2 == self.ans_unk_idx] = -9999
+                running_loss += real_loss.item()
+                running_corr_exp1 += torch.stack([(ans == pred_exp1.cpu()) for ans in multi_choice]).any(dim=0).sum()
+                running_corr_exp2 += torch.stack([(ans == pred_exp2.cpu()) for ans in multi_choice]).any(dim=0).sum()
+
+
                 noise = Variable(torch.randn(image.size(0), 100)).to(device)
                 noise = noise.view(noise.size(0), 100, 1, 1)
 
@@ -151,6 +160,7 @@ class Trainer(object):
                 _, _, outputs = self.discriminator(fake_images, qst_emb)
                 fake_loss = criterion(outputs, label)
                 fake_score = outputs
+
 
                 d_loss = real_loss + fake_loss
 
@@ -188,21 +198,39 @@ class Trainer(object):
                 g_loss.backward()
                 self.optimG.step()
 
-                if iteration==60:
-                    print(fake_images[0])
-                    print(image[0])
-
                 if iteration % 5 == 0:
                     self.logger.log_iteration_gan(epoch,d_loss, g_loss, real_score, fake_score)
                     self.logger.draw(image, fake_images)
 
             self.logger.plot_epoch_w_scores(epoch)
 
-            Utils.save_checkpoint(self.discriminator, self.generator, self.checkpoints_path, self.save_path, epoch)
+            if (epoch+1) % 5 ==0:
+                Utils.save_checkpoint(self.discriminator, self.generator, self.checkpoints_path, self.save_path, epoch)
 
+            # Print the average loss and accuracy in an epoch.
+            batch_step_size = len(self.data_loader['train'].dataset) / self.batch_size
+            epoch_loss = running_loss / batch_step_size
+            epoch_acc_exp1 = running_corr_exp1.double() / len(self.data_loader['train'].dataset)      # multiple choice
+            epoch_acc_exp2 = running_corr_exp2.double() / len(self.data_loader['train'].dataset)      # multiple choice
+
+            print('| {} SET | Epoch [{:02d}/{:02d}], Loss: {:.4f}, Acc(Exp1): {:.4f}, Acc(Exp2): {:.4f} \n'
+                  .format('train', epoch, self.num_epochs-1, epoch_loss, epoch_acc_exp1, epoch_acc_exp2))
+
+            # Log the loss and accuracy in an epoch.
+            with open(os.path.join(self.log_dir, '{}-log-epoch-{:02}.txt')
+                      .format('train', epoch+1), 'w') as f:
+                f.write(str(epoch+1) + '\t'
+                        + str(epoch_loss) + '\t'
+                        + str(epoch_acc_exp1.item()) + '\t'
+                        + str(epoch_acc_exp2.item()))
+            
             #validation phase
             self.generator.eval()
             self.discriminator.eval()
+
+            running_loss = 0.0
+            running_corr_exp1 = 0
+            running_corr_exp2 = 0
 
             for batch_sample in tqdm(self.data_loader['valid']):
 
@@ -238,6 +266,13 @@ class Trainer(object):
             print('| {} SET | Epoch [{:02d}/{:02d}], Loss: {:.4f}, Acc(Exp1): {:.4f}, Acc(Exp2): {:.4f} \n'
                   .format('valid', epoch, self.num_epochs-1, epoch_loss, epoch_acc_exp1, epoch_acc_exp2))
 
+            # Log the loss and accuracy in an epoch.
+            with open(os.path.join(self.log_dir, '{}-log-epoch-{:02}.txt')
+                      .format('valid', epoch+1), 'w') as f:
+                f.write(str(epoch+1) + '\t'
+                        + str(epoch_loss) + '\t'
+                        + str(epoch_acc_exp1.item()) + '\t'
+                        + str(epoch_acc_exp2.item()))
 
             '''    
                 iteration += 1
