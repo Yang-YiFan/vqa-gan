@@ -56,7 +56,7 @@ parser.add_argument('--num_workers', type=int, default=0,
 parser.add_argument('--save_step', type=int, default=1,
                     help='save step of model.')
 
-parser.add_argument("--inference", default=False, action='store_true')
+parser.add_argument("--demo", default=False, action='store_true')
 
 parser.add_argument("--l1_coef", default=50, type=float)
 
@@ -68,8 +68,8 @@ args = parser.parse_args()
 
 trainer = Trainer(args)
 
-if not args.inference:
+if not args.demo:
     trainer.train()
 else:
-    trainer.predict()
+    trainer.demo()
 

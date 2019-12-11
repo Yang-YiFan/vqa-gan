@@ -351,33 +351,34 @@ class Trainer(object):
                 Utils.save_checkpoint(self.discriminator, self.generator, self.checkpoints_path, self.save_path, epoch)
             '''
 
-    def predict(self):
-        for sample in self.data_loader:
-            right_images = sample['right_images']
-            right_embed = sample['right_embed']
-            txt = sample['txt']
+    def demo(self):
+        self.generator.load_state_dict(torch.load('./checkpoints/gen_29.pth'))
+        self.discriminator.load_state_dict(torch.load('./checkpoints/disc_29.pth'))
+        self.generator.eval()
+        self.discriminator.eval()
 
-            if not os.path.exists('results/{0}'.format(self.save_path)):
-                os.makedirs('results/{0}'.format(self.save_path))
+        dataiter = iter(self.data_loader['valid'])
+        batch_sample = dataiter.next()
 
-            right_images = Variable(right_images.float()).to(device)
-            right_embed = Variable(right_embed.float()).to(device)
+        image = batch_sample['image'].to(device)
+        question = batch_sample['question'].to(device)
+        label = batch_sample['answer_label'].to(device)
+        multi_choice = batch_sample['answer_multi_choice']  # not tensor, list.
 
-            # Train the generator
-            noise = Variable(torch.randn(right_images.size(0), 100)).to(device)
-            noise = noise.view(noise.size(0), 100, 1, 1)
-            fake_images = self.generator(right_embed, noise)
+        noise = Variable(torch.randn(image.size(0), 100)).to(device)
+        noise = noise.view(noise.size(0), 100, 1, 1)
 
-            self.logger.draw(right_images, fake_images)
+        with torch.no_grad():
+            qst_emb = self.generator.gen_qst_emb(question)
+            activation_real, activation_real2, outputs = self.discriminator(image, qst_emb)
+            fake_images = self.generator(question, label, noise, activation_real, activation_real2)
+            _, _, outputs = self.discriminator(fake_images, qst_emb)
+            _, pred_exp1 = torch.max(outputs, 1)  # [batch_size]
 
-            for image, t in zip(fake_images, txt):
-                im = Image.fromarray(image.data.mul_(127.5).add_(127.5).byte().permute(1, 2, 0).cpu().numpy())
-                im.save('results/{0}/{1}.jpg'.format(self.save_path, t.replace("/", "")[:100]))
-                print(t)
+        for i in range(8):
+            print([self.data_loader['valid'].dataset.qst_vocab.idx2word(idx) for idx in question[i].tolist()])
+            print('ground truth: ', [self.data_loader['valid'].dataset.ans_vocab.idx2word(label[i].tolist())])
+            print('fake answer: ', [self.data_loader['valid'].dataset.ans_vocab.idx2word(pred_exp1[i].tolist())])
+        #print([self.data_loader['valid'].dataset.ans_vocab.idx2word(idx) for idx in label[0].tolist()])
 
-
-
-
-
-
-
+        self.logger.draw(image, fake_images)
