@@ -177,6 +177,7 @@ class ImgDecoder(nn.Module):
 			)
 
         self.netG_end = nn.Sequential(
+			# ngf = 64
 			# state size. (ngf*16) x 7 x 7
 			BasicBlock(self.ngf * 16, self.ngf * 8, downsample=conv3x3(self.ngf * 16, self.ngf * 8)),
             BasicBlock(self.ngf * 8, self.ngf * 8),
