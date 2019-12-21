@@ -2,7 +2,7 @@
 
 MIT 6.869 Course Project by Yifan Yang and Zhen Guo.
 
-[gen-vqa](./gen_vqa) is our generative VQA model.
+[gen-vqa](./gen-vqa) is our generative VQA model.
 
 [basic_vqa](./basic_vqa) is basic VQA on abstract scene.
 
