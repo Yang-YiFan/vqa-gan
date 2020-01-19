@@ -1,4 +1,6 @@
-# Gen-VQA
+# Gen-VQA 
+
+[![Build Status](https://travis-ci.com/Yang-YiFan/vqa-gan.svg?branch=master)](https://travis-ci.com/Yang-YiFan/vqa-gan)
 
 MIT 6.869 Course Project by Yifan Yang and Zhen Guo.
 
