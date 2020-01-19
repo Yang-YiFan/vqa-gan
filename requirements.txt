@@ -1,0 +1,4 @@
+numpy==1.16.1
+h5py
+tqdm
+visdom
