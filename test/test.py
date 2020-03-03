@@ -7,8 +7,5 @@ import platform, os
 a = torch.Tensor([1,2,3])
 
 print(platform.linux_distribution())
-print(platform.system())
-print(platform.release())
-print(os.name)
 print('hello tensor!')
 print(a)
